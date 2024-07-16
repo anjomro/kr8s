@@ -175,15 +175,23 @@ class Api:
                     continue
                 else:
                     if e.response.status_code >= 400 and e.response.status_code < 500:
+                        # Try to parse error as JSON. If that fails use the raw response conent
                         try:
                             error = e.response.json()
-                            error_message = error["message"]
+                            # Use message from error if available, else use the raw response content
+                            raise ServerError(
+                                error.get("message", str(e.response)), status=error, response=e.response
+                            ) from e
                         except json.JSONDecodeError:
-                            error = e.response.text
-                            error_message = str(e)
-                        raise ServerError(
-                            error_message, status=error, response=e.response
-                        ) from e
+                            msg_raw = e.response.content
+                            if type(msg_raw) == bytes:
+                                msg = msg_raw.decode()
+                            else:
+                                msg = str(msg_raw)
+                            # Use response code as status if JSON parsing fails
+                            raise ServerError(
+                                msg, status=e.response.status_code, response=e.response
+                            ) from e
                     elif e.response.status_code >= 500:
                         raise ServerError(
                             str(e),
